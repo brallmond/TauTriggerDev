@@ -10,6 +10,11 @@ def get_L1Taus(events):
     L1Taus = ak.zip(L1taus_dict)
     return L1Taus
 
+def get_L1Jets(events):
+    L1jets_dict = {"pt": events["L1Jet_pt"].compute(), "eta": events["L1Jet_eta"].compute(), "phi": events["L1Jet_phi"].compute()}
+    L1Jets = ak.zip(L1jets_dict)
+    return L1Jets
+
 def get_Taus(events):
     taus_dict = {"pt": events["Tau_pt"].compute(), "eta": events["Tau_eta"].compute(), "phi": events["Tau_phi"].compute(), "deepTauVSjet": events["Tau_deepTauVSjet"].compute()}
     Taus = ak.zip(taus_dict)
@@ -25,10 +30,20 @@ def get_GenTaus(events):
     GenTaus = ak.zip(gentaus_dict)
     return GenTaus
 
+def get_GenJets(events):
+    genjets_dict = {"pt": events["GenJet_pt"].compute(), "eta": events["GenJet_eta"].compute(), "phi": events["GenJet_phi"].compute()}
+    GenJets = ak.zip(genjets_dict)
+    return GenJets
+
 def hGenTau_selection(events):
     # return mask for GenLepton for hadronic GenTau passing minimal selection
     hGenTau_mask = (events['GenLepton_pt'].compute() >= 20) & (np.abs(events['GenLepton_eta'].compute()) <= 2.3) & (events['GenLepton_kind'].compute() == 5)
     return hGenTau_mask
+
+def hGenJet_selection(events):
+    # return mask for GenJet passing minimal selection
+    hGenJet_mask = (events['GenJet_pt'].compute() >= 20)
+    return hGenJet_mask
 
 def matching_L1Taus_obj(L1Taus, Obj, dR_matching_min = 0.5):
     obj_inpair, l1taus_inpair = ak.unzip(ak.cartesian([Obj, L1Taus], nested=True))
@@ -36,6 +51,14 @@ def matching_L1Taus_obj(L1Taus, Obj, dR_matching_min = 0.5):
     mask_obj_l1taus = (dR_obj_l1taus < dR_matching_min)
     
     mask = ak.any(mask_obj_l1taus, axis=-1)
+    return mask
+
+def matching_L1Jets_obj(L1Jets, Obj, dR_matching_min = 0.5):
+    obj_inpair, l1jets_inpair = ak.unzip(ak.cartesian([Obj, L1Jets], nested=True))
+    dR_obj_l1jets = delta_r(obj_inpair, l1jets_inpair)
+    mask_obj_l1jets = (dR_obj_l1jets < dR_matching_min)
+
+    mask = ak.any(mask_obj_l1jets, axis=-1)
     return mask
 
 def matching_Gentaus(L1Taus, Taus, GenTaus, dR_matching_min = 0.5):
@@ -48,6 +71,18 @@ def matching_Gentaus(L1Taus, Taus, GenTaus, dR_matching_min = 0.5):
     mask_gentaus_taus = (dR_gentaus_taus < dR_matching_min)
 
     matching_mask = ak.any(mask_gentaus_l1taus, axis=-1) & ak.any(mask_gentaus_taus, axis=-1)  # Gentau should match l1Taus and Taus
+    return matching_mask
+
+def matching_Genjets(L1Jets, Jets, GenJets, dR_matching_min = 0.5):
+    genjets_inpair, l1jets_inpair = ak.unzip(ak.cartesian([GenJets, L1Jets], nested=True))
+    dR_genjets_l1jets = delta_r(genjets_inpair, l1jets_inpair)
+    mask_genjets_l1jets = (dR_genjets_l1jets < dR_matching_min)
+
+    genjets_inpair, jets_inpair = ak.unzip(ak.cartesian([GenJets, Jets], nested=True))
+    dR_genjets_jets = delta_r(genjets_inpair, jets_inpair)
+    mask_genjets_jets = (dR_genjets_jets < dR_matching_min)
+
+    matching_mask = ak.any(mask_genjets_l1jets, axis=-1) & ak.any(mask_genjets_jets, axis=-1)  # Genjet should match l1Jets and Jets
     return matching_mask
 
 def compute_PNet_charge_prob(probTauP, probTauM):
@@ -112,18 +147,44 @@ class Dataset:
         ''' 
         Save only needed informations (for numerator cuts) of events passing denominator cuts 
         '''
+
+        conditions = []
+        for r, ls in zip(run, lumiSections_range):
+            condition = f"((events['run'] == {r}) & "
+            ls_conditions = []
+            ls = ls.split(", ")
+            for ils in range(0, len(ls), 2):
+                ls_conditions.append(f"((events['luminosityBlock'] >= {ls[ils]}) & (events['luminosityBlock'] <= {ls[ils + 1]}))")
+            condition += f"({' | '.join(ls_conditions)}))"
+            conditions.append(condition)
+
         events = self.get_events()
         N_events = len(events)
         print(f"Number of events: {N_events}")
-        events = events[events['run'] == run]
-        print(f"Number of events belonging to run {run}: {len(events)}")
-        events = events[(events["luminosityBlock"] >= lumiSections_range[0]) & (events["luminosityBlock"] <= lumiSections_range[1])]
-        print(f"Number of event in LumiSections range {lumiSections_range}: {len(events)}")
+
+        events = eval(f"events[{' | '.join(conditions)}]")
+        print(f"Number of selected events : {len(events)}")
+
+        events = self.get_events()
+        N_events = len(events)
+        print(f"Number of events: {N_events}")
+        #events = events[events['run'] == run]
+        #print(f"Number of events belonging to run {run}: {len(events)}")
+        #events = events[(events["luminosityBlock"] >= lumiSections_range[0]) & (events["luminosityBlock"] <= lumiSections_range[1])]
+        #print(f"Number of event in LumiSections range {lumiSections_range}: {len(events)}")
         Nevents_L1 = len(events[events['L1_DoubleIsoTau34er2p1'].compute()])
         print(f"   - events passing L1_DoubleIsoTau34er2p1 flag: {Nevents_L1}")
         Nevents_HLT = len(events[events['HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1'].compute()])
         print(f"   - events passing HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1 flag: {Nevents_HLT}")
-
+        Nevents_HLTVBFDeepTau1 = len(events[events['HLT_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1'].compute()])
+        print(f"   - events passing HLT_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p flag: {Nevents_HLTVBFDeepTau1}")
+        Nevents_HLTVBFPNet1 = len(events[events['HLT_VBF_DiPFJet45_Mjj650_PNetTauhPFJet45_L2NN_eta2p3'].compute()])
+        print(f"   - events passing HLT_VBF_DiPFJet45_Mjj650_PNetTauhPFJet45_L2NN_eta2p3 flag: {Nevents_HLTVBFPNet1}")
+        Nevents_HLTVBFDeepTau2 = len(events[events['HLT_VBF_DoubleMediumDeepTauPFTauHPS20_eta2p1'].compute()])
+        print(f"   - events passing HLT_VBF_DoubleMediumDeepTauPFTauHPS20_eta2p1 flag: {Nevents_HLTVBFDeepTau2}")
+        Nevents_HLTVBFPNet2 = len(events[events['HLT_VBF_DoublePNetTauhPFJet20_eta2p2'].compute()])
+        print(f"   - events passing HLT_VBF_DoublePNetTauhPFJet20_eta2p2 flag: {Nevents_HLTVBFPNet2}")
+ 
         # list of all info you need to save
         saved_info_events = ['event',
                              'luminosityBlock',
@@ -131,7 +192,23 @@ class Dataset:
                              'nPFPrimaryVertex',
                              'nPFSecondaryVertex',
                              'L1_DoubleIsoTau34er2p1',
+                             'L1_DoubleIsoTau26er2p1_Jet55_RmOvlp_dR0p5',
+                             'L1_DoubleJet45_Mass_Min600_IsoTau45er2p1_RmOvlp_dR0p5',
+                             'L1_DoubleJet_110_35_DoubleJet35_Mass_Min800',
+                             'L1_Mu18er2p1_Tau24er2p1',
+                             'L1_LooseIsoEG22er2p1_IsoTau26er2p1_dR_Min0p3',
                              'HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1',
+                             'HLT_DoublePNetTauhPFJet30_Medium_L2NN_eta2p3',
+                             'HLT_LooseDeepTauPFTauHPS180_L2NN_eta2p1',
+                             'HLT_SinglePNetTauhPFJet130_Loose_L2NN_eta2p3',
+                             'HLT_IsoMu20_eta2p1_LooseDeepTauPFTauHPS27_eta2p1_CrossL1',
+                             'HLT_IsoMu20_eta2p1_PNetTauhPFJet27_Loose_eta2p3_CrossL1',
+                             'HLT_Ele24_eta2p1_WPTight_Gsf_LooseDeepTauPFTauHPS30_eta2p1_CrossL1',
+                             'HLT_Ele24_eta2p1_WPTight_Gsf_PNetTauhPFJet30_Loose_eta2p3_CrossL1',
+                             'HLT_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1',
+                             'HLT_VBF_DiPFJet45_Mjj650_PNetTauhPFJet45_L2NN_eta2p3',
+                             'HLT_VBF_DoubleMediumDeepTauPFTauHPS20_eta2p1',
+                             'HLT_VBF_DoublePNetTauhPFJet20_eta2p2',
                              'Tau_pt',
                              'Tau_eta',
                              'Tau_phi',
@@ -148,7 +225,10 @@ class Dataset:
                              'Jet_PNet_ptcorr',
                              'Jet_pt',
                              'Jet_eta',
-                             'Jet_phi']
+                             'Jet_phi',
+                             'L1Jet_pt',
+                             'L1Jet_eta',
+                             'L1Jet_phi'] 
         
         if len(events)!= 0:
             print('Saving info in tmp file')
@@ -174,6 +254,15 @@ class Dataset:
                              'Tau_eta', 
                              'Tau_phi', 
                              'Tau_deepTauVSjet', 
+                             'L1_DoubleIsoTau34er2p1',
+                             'L1_DoubleJet45_Mass_Min600_IsoTau45er2p1_RmOvlp_dR0p5',
+                             'L1_DoubleJet_110_35_DoubleJet35_Mass_Min800',
+                             'HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1',
+                             'HLT_DoublePNetTauhPFJet30_Medium_L2NN_eta2p3',
+                             'HLT_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1',
+                             'HLT_VBF_DiPFJet45_Mjj650_PNetTauhPFJet45_L2NN_eta2p3',
+                             'HLT_VBF_DoubleMediumDeepTauPFTauHPS20_eta2p1',
+                             'HLT_VBF_DoublePNetTauhPFJet20_eta2p2',
                              'L1Tau_pt', 
                              'L1Tau_eta', 
                              'L1Tau_phi', 
@@ -186,7 +275,13 @@ class Dataset:
                              'Jet_PNet_ptcorr',
                              'Jet_pt',
                              'Jet_eta',
-                             'Jet_phi']
+                             'Jet_phi',
+                             'L1Jet_pt',
+                             'L1Jet_eta',
+                             'L1Jet_phi',
+                             'GenJet_pt',
+                             'GenJet_eta',
+                             'GenJet_phi']
         
         saved_info_GenLepton = ['pt', 
                                 'eta', 

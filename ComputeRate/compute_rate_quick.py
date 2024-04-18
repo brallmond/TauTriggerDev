@@ -53,6 +53,16 @@ if HLT_name == 'HLT_DoubleTauOrSingleTau':
     else:
         N_den, N_num = dataset_rate.get_Nnum_Nden_HLT_DoubleORSingleDeepTau()
 
+if HLT_name == 'HLT_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1':
+    from HLTClass.VBFSingleTauDataset import VBFSingleTauDataset
+
+    dataset_rate = VBFSingleTauDataset(FileNameList_rate)
+
+    if PNetMode:
+        N_den, N_num = dataset_rate.get_Nnum_Nden_VBFSingleTauPNet(PNetparam)
+    else:
+        N_den, N_num = dataset_rate.get_Nnum_Nden_HLTVBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1()
+
 rate, rate_low, rate_up = compute_ratio_witherr(N_num, N_den)
 
 print(f"Rate : {rate*L1A_physics}")

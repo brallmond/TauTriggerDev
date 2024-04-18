@@ -81,6 +81,7 @@ def plot_gaussian(x_data, plot_param, n_bins = 100, range_hist = [-0.2,0.2]):
     return
 
 path_to_file = '/afs/cern.ch/work/p/pdebryas/PNetAtHLT/data/EfficiencyDen/HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1/GluGluHToTauTau_M-125.root'
+path_to_file = '/afs/cern.ch/work/b/ballmond/PNetAtHLT/data/EfficiencyDen/HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1/GluGluHToTauTau_M-125.root' 
 events = uproot.dask(path_to_file+':Events', library='ak')
 
 GenTaus = get_GenTaus(events)

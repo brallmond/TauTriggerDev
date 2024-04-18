@@ -12,7 +12,7 @@ action() {
     export RUN_PATH="$this_dir"
 
     #setup private conda installation for env activation
-    PRIVATE_CONDA_INSTALL=/afs/cern.ch/work/p/pdebryas/miniconda3
+    PRIVATE_CONDA_INSTALL=/afs/cern.ch/work/b/ballmond/miniconda3
     __conda_setup="$($PRIVATE_CONDA_INSTALL/bin/conda shell.${SHELL##*/} hook)"
     if [ $? -eq 0 ]; then
         eval "$__conda_setup"

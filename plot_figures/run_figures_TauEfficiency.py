@@ -10,7 +10,7 @@ data_eff_path =f'{os.getenv("RUN_PATH")}/ComputeEfficiency/result/'
 
 #sample_list = ['ZprimeToTauTau_M-4000', 'VBFHToTauTau_M125', 'GluGluHToTauTau_M-125',  'VBFHHto2B2Tau_CV-1_C2V-1_C3-1']
 sample_list = ['ZprimeToTauTau_M-4000', 'VBFHToTauTau_M125',  'VBFHHto2B2Tau_CV-1_C2V-1_C3-1', 'GluGlutoHHto2B2Tau_kl-1p00_kt-1p00_c2-0p00', 'GluGluHToTauTau_M-125', 'GluGluHToTauTau_M-125_ext1']
-
+#sample_list = ['GluGluHToTauTau_M-125']
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 #figures Tau eff
@@ -56,7 +56,6 @@ for var in var_list:
         savefig_path = output_fig +f'SingleTau/SingleTau_PU{i}_{var}.pdf'
         plot_eff_tau(fileName_dict, bin_dict[var], savefig_path, var, mask_charge = None, Hadron_mask = None, PU_mask=i) 
 
-
 print('')
 print('Figures Tau eff DiTau:')
 
@@ -74,6 +73,7 @@ for WP in WP_params_DiTau.keys():
     list_filename = []
     for sample_av in sample_list:
         filename = f'{data_eff_path_DiTau}PNetTresh_{WP_params_DiTau[WP]["t1"]}_{WP_params_DiTau[WP]["t2"]}_30/{sample_av}.root'
+        #filename = f'{data_eff_path_DiTau}{HLTnameDiTau}/{sample_av}.root'
         list_filename.append(filename)
     fileName_dict[f'{WP}_{str(rate)}Hz'] = list_filename
 

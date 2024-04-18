@@ -32,18 +32,27 @@ for i in range(len(MCDataFolderNames)):
 eff, err_low, err_up = compute_ratio_witherr(N_num, N_den)
 
 if HLT_name == 'HLT_DoubleMediumDeepTauPFTauHPS35_L2NN_eta2p1':
-    print(f"Total number of hadronic GenTaus with with vis. pt <= 20 and eta< 2.1: {N_den}")
+    print(f"Total number of hadronic GenTaus with with vis. pt >= 20 and |eta| < 2.1: {N_den}")
     if PNetMode:
-        print(f"Total number of GenTaus matching with Jet/L1Tau passing DiTau path with Pnet param {PNetparam}: {N_num}")
+        print(f"Total number of GenTaus matching with Jet/L1Tau passing DiTau path with PNet param {PNetparam}: {N_num}")
     else:
         print(f"Total number of GenTaus matching with Tau/L1Tau passing {HLT_name} requirements: {N_num}")
 
-if HLT_name == 'HLT_LooseDeepTauPFTauHPS180_L2NN_eta2p1_v3':
-    print(f"Total number of hadronic GenTaus with with vis. pt <= 20 and eta< 2.1: {N_den}")
+elif HLT_name == 'HLT_LooseDeepTauPFTauHPS180_L2NN_eta2p1_v3':
+    print(f"Total number of hadronic GenTaus with with vis. pt >= 20 and |eta| < 2.1: {N_den}")
     if PNetMode:
-        print(f"Total number of GenTaus matching with Jet/L1Tau passing SingleTau path with Pnet param {PNetparam}: {N_num}")
+        print(f"Total number of GenTaus matching with Jet/L1Tau passing SingleTau path with PNet param {PNetparam}: {N_num}")
     else:
         print(f"Total number of GenTaus matching with Tau/L1Tau passing {HLT_name} requirements: {N_num}")
+
+elif HLT_name == 'HLT_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1':
+    print(f"Total number of hadronic GenTaus with with vis. pt >= 20 and |eta| < 2.1: {N_den}")
+    if PNetMode:
+        print(f"Total number of GenTaus matching with Jet/L1Tau passing VBFSingleTau path with PNet param {PNetparam}: {N_num}")
+    else:
+        print(f"Total number of GenTaus matching with Tau/L1Tau passing {HLT_name} requirements: {N_num}")
+
+
 
 print('Computed Eff: ')
 print(f"Eff : {eff}")

@@ -352,8 +352,6 @@ def L1Jet_Jet45_selection(events, VBFSingleTau_mask) -> ak.Array:
     tau_eta = ak.drop_none(ak.mask(events['L1Tau_eta'].compute(), VBFSingleTau_mask))
     tau_phi = ak.drop_none(ak.mask(events['L1Tau_phi'].compute(), VBFSingleTau_mask))
 
-    L1_DoubleJet45_mask = (events['L1Jet_pt'].compute() >= 45)
-
     jet_pt  = events['L1Jet_pt'].compute()
     jet_eta = events['L1Jet_eta'].compute()
     jet_phi = events['L1Jet_phi'].compute()
@@ -367,10 +365,10 @@ def L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_selection_mask):
     L1Jet_Jet45_selection_mask.show()
     print("L1Jet selection")
     events['L1Jet_pt'].compute().show()
-    print("boutta crash")
+    print("about to crash")
     temp  = ak.mask(events['L1Jet_pt'].compute(),  L1Jet_Jet45_selection_mask)
     print(temp)
-    print("didn't crash")
+    print("if this prints i didn't crash")
     jet_pt  = ak.drop_none(ak.mask(events['L1Jet_pt'].compute(),  L1Jet_Jet45_selection_mask))
     jet_eta = ak.drop_none(ak.mask(events['L1Jet_eta'].compute(), L1Jet_Jet45_selection_mask))
     jet_phi = ak.drop_none(ak.mask(events['L1Jet_phi'].compute(), L1Jet_Jet45_selection_mask))

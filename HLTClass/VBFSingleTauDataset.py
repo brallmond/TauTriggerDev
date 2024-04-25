@@ -55,114 +55,29 @@ def deltaR(eta1: float, phi1: float, eta2: float, phi2: float) -> float:
     dphi = phi_mpi_pi(phi1 - phi2)
     return float(math.sqrt(deta * deta + dphi * dphi))
 
-'''
-40278
-[True, True, False]
-[False, True, True, False, False]
-40282
-[True, True, False, False, False]
-[False, True, True, False, False, False, False]
-40303
-[True, True, False, False]
-[False, True, True, False, False, False]
-40307
-[True, True]
-[False, True, True, False]
-40334
-[True, True]
-[False, True, True, False]
-40357
-[True, True, False, False, False, False]
-[False, True, True, False, False, False, False, False]
-40365
-[True, True, False, False]
-[True, False, False, True, False, False]
-'''
-
-'''
-40274
-[True, True, True, False]
-[False, False]
-40279
-[True, True, False, False, False]
-[False, False, False, False]
-40290
-[True, True, False, False]
-[False, False, False]
-40295
-[True, True, False]
-[False, False]
-40302
-[True, True, True, False, False, False, False]
-[False, False, False, False, False]
-40327
-[True, True, False]
-[False, False]
-'''
-
 @nb.jit(nopython=True)
 def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, jet_pt_th):
     for iev in range(len(tau_eta)):
         builder.begin_list()
         for j_pt, j_eta, j_phi in zip(jet_pt[iev], jet_eta[iev], jet_phi[iev]):
-            #if ((j_pt > jet_pt_th) and (j_eta < 4.7 and j_eta > -4.7)):
             if j_pt < jet_pt_th:
-                builder.append(False) # below threshold # originally here
+                builder.append(False) # below threshold
                 continue
-            else: #builder.append(True) # this works as intended, not sure what is missing
+            else:
               num_matches = 0
               dR = 999
-              # maybe this isn't being entered? 
-              #print("want to enter loop")
-              #print(tau_eta[iev])
               if (len(tau_eta[iev]) == 0):
                   builder.append(True)
                   continue
               good_jet = True
               for t_eta, t_phi in zip(tau_eta[iev], tau_phi[iev]):
-                  #print("entered loop")
-                  if t_eta == None:
-                      builder.append(True) # not overlapped with tau # added
-                      continue
-                  #else: pass
-               
                   # only save on last tau, so set a boolean here and fill it outside of the loop :)
                   dR = deltaR(j_eta, j_phi, t_eta, t_phi)
-                  #print(dR, iev)
                   if dR < 0.5:
                       good_jet = False
-                  #if dR < 0.5:
-                  #    builder.append(False) # overlapped with tau # added
-                  #else:
-                  #    builder.append(True) # not overlapped with tau # added
               builder.append(good_jet)
-
-            #    if dR > 0.5:
-            #        num_matches += 1
-            #builder.append(num_matches >= 2)
         builder.end_list()
     return builder
-
-#@nb.jit(nopython=True)
-#def apply_ovrm(builder, tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, tau_pt_th):
-##def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, tau_pt_th):
-#    for iev in range(len(tau_eta)):
-#        builder.begin_list()
-#        for t_pt, t_eta, t_phi in zip(tau_pt[iev], tau_eta[iev], tau_phi[iev]):
-#            if t_pt < tau_pt_th:
-#                builder.append(False)
-#                continue
-#            num_matches = 0
-#            for j_eta, j_phi in zip(jet_eta[iev], jet_phi[iev]):
-#                if j_eta == None:
-#                    continue
-#                
-#                dR = deltaR(t_eta, t_phi, j_eta, j_phi)
-#                if dR > 0.5:
-#                    num_matches += 1
-#            builder.append(num_matches >= 2)
-#        builder.end_list()
-#    return builder
 
 @nb.jit(nopython=True)
 def mjj(pt1: float, eta1: float, phi1: float,

@@ -55,46 +55,114 @@ def deltaR(eta1: float, phi1: float, eta2: float, phi2: float) -> float:
     dphi = phi_mpi_pi(phi1 - phi2)
     return float(math.sqrt(deta * deta + dphi * dphi))
 
+'''
+40278
+[True, True, False]
+[False, True, True, False, False]
+40282
+[True, True, False, False, False]
+[False, True, True, False, False, False, False]
+40303
+[True, True, False, False]
+[False, True, True, False, False, False]
+40307
+[True, True]
+[False, True, True, False]
+40334
+[True, True]
+[False, True, True, False]
+40357
+[True, True, False, False, False, False]
+[False, True, True, False, False, False, False, False]
+40365
+[True, True, False, False]
+[True, False, False, True, False, False]
+'''
+
+'''
+40274
+[True, True, True, False]
+[False, False]
+40279
+[True, True, False, False, False]
+[False, False, False, False]
+40290
+[True, True, False, False]
+[False, False, False]
+40295
+[True, True, False]
+[False, False]
+40302
+[True, True, True, False, False, False, False]
+[False, False, False, False, False]
+40327
+[True, True, False]
+[False, False]
+'''
+
+@nb.jit(nopython=True)
+def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, jet_pt_th):
+    for iev in range(len(tau_eta)):
+        builder.begin_list()
+        for j_pt, j_eta, j_phi in zip(jet_pt[iev], jet_eta[iev], jet_phi[iev]):
+            #if ((j_pt > jet_pt_th) and (j_eta < 4.7 and j_eta > -4.7)):
+            if j_pt < jet_pt_th:
+                builder.append(False) # below threshold # originally here
+                continue
+            else: #builder.append(True) # this works as intended, not sure what is missing
+              num_matches = 0
+              dR = 999
+              # maybe this isn't being entered? 
+              #print("want to enter loop")
+              #print(tau_eta[iev])
+              if (len(tau_eta[iev]) == 0):
+                  builder.append(True)
+                  continue
+              good_jet = True
+              for t_eta, t_phi in zip(tau_eta[iev], tau_phi[iev]):
+                  #print("entered loop")
+                  if t_eta == None:
+                      builder.append(True) # not overlapped with tau # added
+                      continue
+                  #else: pass
+               
+                  # only save on last tau, so set a boolean here and fill it outside of the loop :)
+                  dR = deltaR(j_eta, j_phi, t_eta, t_phi)
+                  #print(dR, iev)
+                  if dR < 0.5:
+                      good_jet = False
+                  #if dR < 0.5:
+                  #    builder.append(False) # overlapped with tau # added
+                  #else:
+                  #    builder.append(True) # not overlapped with tau # added
+              builder.append(good_jet)
+
+            #    if dR > 0.5:
+            #        num_matches += 1
+            #builder.append(num_matches >= 2)
+        builder.end_list()
+    return builder
+
 #@nb.jit(nopython=True)
-#def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, jet_pt_th):
+#def apply_ovrm(builder, tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, tau_pt_th):
+##def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, tau_pt_th):
 #    for iev in range(len(tau_eta)):
 #        builder.begin_list()
-#        for j_pt, j_eta, j_phi in zip(jet_pt[iev], jet_eta[iev], jet_phi[iev]):
-#            if j_pt < jet_pt_th:
+#        for t_pt, t_eta, t_phi in zip(tau_pt[iev], tau_eta[iev], tau_phi[iev]):
+#            if t_pt < tau_pt_th:
 #                builder.append(False)
 #                continue
 #            num_matches = 0
-#            for t_eta, t_phi in zip(tau_eta[iev], tau_phi[iev]):
-#                if t_eta == None:
+#            for j_eta, j_phi in zip(jet_eta[iev], jet_phi[iev]):
+#                if j_eta == None:
 #                    continue
 #                
-#                dR = deltaR(j_eta, j_phi, t_eta, t_phi)
+#                dR = deltaR(t_eta, t_phi, j_eta, j_phi)
 #                if dR > 0.5:
 #                    num_matches += 1
 #            builder.append(num_matches >= 2)
 #        builder.end_list()
 #    return builder
-
-@nb.jit(nopython=True)
-def apply_ovrm(builder, tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, tau_pt_th):
-#def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, tau_pt_th):
-    for iev in range(len(tau_eta)):
-        builder.begin_list()
-        for t_pt, t_eta, t_phi in zip(tau_pt[iev], tau_eta[iev], tau_phi[iev]):
-            if t_pt < tau_pt_th:
-                builder.append(False)
-                continue
-            num_matches = 0
-            for j_eta, j_phi in zip(jet_eta[iev], jet_phi[iev]):
-                if j_eta == None:
-                    continue
-                
-                dR = deltaR(t_eta, t_phi, j_eta, j_phi)
-                if dR > 0.5:
-                    num_matches += 1
-            builder.append(num_matches >= 2)
-        builder.end_list()
-    return builder
 
 @nb.jit(nopython=True)
 def mjj(pt1: float, eta1: float, phi1: float,
@@ -117,7 +185,7 @@ def pass_mjj(jet_pt: ak.Array, jet_eta: ak.Array, jet_phi: ak.Array, mjjmax: flo
                     if tmp_mjj > evt_mjj:
                         evt_mjj = tmp_mjj
             out_mjj.append(evt_mjj>=mjjmax)
-    print(out_mjj)
+    #print(out_mjj)
     return out_mjj
 
 def Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=False) -> ak.Array:
@@ -137,8 +205,8 @@ def Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=False) ->
     jet_eta = events['Jet_eta'].compute()
     jet_phi = events['Jet_phi'].compute()
 
-    #return apply_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
-    return apply_ovrm(ak.ArrayBuilder(), tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, 45.).snapshot()
+    return apply_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
+    #return apply_ovrm(ak.ArrayBuilder(), tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, 45.).snapshot()
 
 def Jet_selection_VBFSingleTau_mjj(events, Jet_selection_VBFSingleTau_Jet_mask):
     print("in Jet_selection_VBFSingleTau_mjj")
@@ -257,13 +325,24 @@ def Tau_selection_VBFSingleTau(events, apply_DeepTau_WP = True):
 def evt_sel_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1(events, n_min = 1, is_gen = False):
     # Selection of event passing condition of VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1 + mask of objects passing those conditions
 
-    L1Tau_IsoTau45er2p1_mask = L1Tau_IsoTau45er2p1_selection(events)
-    L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
-    L1Tau_IsoTau45er2p1L2NN_mask = L1Tau_IsoTau45er2p1_mask & L1Tau_L2NN_selection_VBFSingleTau(events)
-    L1Jet_Jet45_mask = L1Jet_Jet45_selection(events, L1Tau_IsoTau45er2p1_mask)
+    # get mask for L1 taus with iso and pt > 45
+    # get mask for L1 jets with pt > 45
+    # get mask for L1 jets that aren't taus (uses previous two masks)
+    # get mask for events where L1 jet pair has mjj > 600 (after ovrm)
+    # get mask for L1 taus passing L2NN requirements
+    # end L1
 
-    L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_mask)
-   
+    L1Tau_IsoTau45er2p1_mask = L1Tau_IsoTau45er2p1_selection(events)
+    L1Jet_Jet45_mask = L1Jet_Jet45_selection(events) # used for debugging only
+    L1Jet_Jet45_ovrm_mask = L1Jet_Jet45_ovrm_selection(events, L1Tau_IsoTau45er2p1_mask)
+
+    L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask)
+    # check cutflow?
+
+    #L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_mask) # works fine
+
+    L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
+
     VBFSingleTau_mask     = Tau_selection_VBFSingleTau(events)
     VBFSingleTau_Jet_mask = Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=False)
     #VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
@@ -277,11 +356,11 @@ def evt_sel_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1(events, n_m
     print("I'm in the DeepTau counting function!")
     L1_req_mask = (L1_VBFTau_selection(events))
     VBFSingleTau_evt_mask = (                            
-        #(L1_req_mask) &                                  # require L1
-        (ak.sum(L2NN_mask, axis=-1) >= n_min) &
         (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) &
-        (ak.sum(L1Jet_Jet45_mask, axis=-1) >= 2) &
-        (L1_DoubleJet45_Mass_Min600_mask)
+        (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) &
+        #(ak.sum(L1_DoubleJet45_Mass_Min600_mask, axis=-1) >= 2) &
+        (ak.sum(L2NN_mask, axis=-1) >= n_min)
+        #(L1_DoubleJet45_Mass_Min600_mask)
         #(ak.sum(L1Tau_IsoTau45er2p1L2NN_mask, axis=-1) >= n_min) # require L2NN
         #(ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) &  # require 1 offline Tau
         #(ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) &  # require 2 offline Jets, cross-cleaned w Tau
@@ -302,7 +381,8 @@ def evt_sel_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1(events, n_m
     Taus = get_Taus(events)
     Jets = get_Jets(events)
 
-    L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L1Tau_IsoTau45er2p1L2NN_mask, n_min_taus = n_min)
+    #L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L1Tau_IsoTau45er2p1L2NN_mask, n_min_taus = n_min)
+    L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L2NN_mask, n_min_taus = n_min)
     L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_mask, n_min_jets = 2)
     Taus_VBFSingleTau = Taus[VBFSingleTau_mask]
     Jets_VBFSingleTau_Jet = Jets[VBFSingleTau_Jet_mask]
@@ -345,9 +425,7 @@ def L1Tau_IsoTau45er2p1_selection(events):
     L1_IsoTau45er2p1_mask = (events['L1Tau_pt'].compute() >= 45) & (events['L1Tau_eta'].compute() <= 2.131) & (events['L1Tau_eta'].compute() >= -2.131) & (events['L1Tau_hwIso'].compute() > 0 )
     return L1_IsoTau45er2p1_mask
 
-def L1Jet_Jet45_selection(events, VBFSingleTau_mask) -> ak.Array:
-    print("L1Tau mask")
-    VBFSingleTau_mask.show()
+def L1Jet_Jet45_ovrm_selection(events, VBFSingleTau_mask) -> ak.Array:
     tau_pt  = ak.drop_none(ak.mask(events['L1Tau_pt'].compute(), VBFSingleTau_mask))
     tau_eta = ak.drop_none(ak.mask(events['L1Tau_eta'].compute(), VBFSingleTau_mask))
     tau_phi = ak.drop_none(ak.mask(events['L1Tau_phi'].compute(), VBFSingleTau_mask))
@@ -356,22 +434,35 @@ def L1Jet_Jet45_selection(events, VBFSingleTau_mask) -> ak.Array:
     jet_eta = events['L1Jet_eta'].compute()
     jet_phi = events['L1Jet_phi'].compute()
 
-    #return apply_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
-    return apply_ovrm(ak.ArrayBuilder(), tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, 45.).snapshot()
+    return apply_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
+    #return apply_ovrm(ak.ArrayBuilder(), tau_pt, tau_eta, tau_phi, jet_eta, jet_phi, 45.).snapshot()
+
+def L1Jet_Jet45_selection(events):
+    L1_Jet45_mask = (events["L1Jet_pt"].compute() >= 45) & (events['L1Jet_eta'].compute() < 4.7) & (events['L1Jet_eta'].compute() > -4.7)
+    return L1_Jet45_mask
+
+#@nb.jit(nopython=True)
+def L1_dr(events, L1Tau_mask, L1Jet_mask):
+    tau_eta = ak.drop_none(ak.mask(events['L1Tau_eta'].compute(), L1Tau_mask))
+    tau_phi = ak.drop_none(ak.mask(events['L1Tau_phi'].compute(), L1Tau_mask))
+    jet_eta = ak.drop_none(ak.mask(events['L1Jet_eta'].compute(), L1Jet_mask))
+    jet_phi = ak.drop_none(ak.mask(events['L1Jet_phi'].compute(), L1Jet_mask))
+    for event_idx in range(len(jet_eta)): # number of Entries in the list is nEvents
+        for jet_eta, jet_phi in zip(jet_eta[event_idx], jet_phi[event_idx]):
+            for tau_eta, tau_phi in zip(tau_eta[event_idx], tau_phi[event_idx]):
+                if tau_eta == None:
+                    print('ok')
+                    continue
+                dR = deltaR(tau_eta, tau_phi, jet_eta, jet_phi)
+                print(dR)
+    return "happy"
+
 
 def L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_selection_mask):
-    # IM HERE!!! 
-    print("L1Jet mask")
-    L1Jet_Jet45_selection_mask.show()
-    print("L1Jet selection")
-    events['L1Jet_pt'].compute().show()
-    print("about to crash")
-    temp  = ak.mask(events['L1Jet_pt'].compute(),  L1Jet_Jet45_selection_mask)
-    print(temp)
-    print("if this prints i didn't crash")
     jet_pt  = ak.drop_none(ak.mask(events['L1Jet_pt'].compute(),  L1Jet_Jet45_selection_mask))
     jet_eta = ak.drop_none(ak.mask(events['L1Jet_eta'].compute(), L1Jet_Jet45_selection_mask))
     jet_phi = ak.drop_none(ak.mask(events['L1Jet_phi'].compute(), L1Jet_Jet45_selection_mask))
+    print(jet_pt, jet_eta, jet_phi)
 
     L1_DoubleJet45_Mass_Min600_mask = pass_mjj(jet_pt,jet_eta,jet_phi, 600.)
     return L1_DoubleJet45_Mass_Min600_mask

@@ -126,7 +126,6 @@ class SaveOptimisationResultsVBFSingleTau(Task, HTCondorWorkflow, law.LocalWorkf
     config = load_cfg_file()
     output_path = config['DATA']['result_opt']
     add_deeptau = True
-    print(f"add_deeptau = {add_deeptau}")
     def create_branch_map(self):
         branches = {}
         os.makedirs(self.output_path, exist_ok=True)

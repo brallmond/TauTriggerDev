@@ -80,6 +80,50 @@ def apply_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, jet_pt_th):
     return builder
 
 @nb.jit(nopython=True)
+def ovrm_correlation(builder, tau_pt, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, jet_pt_th, mjj_min):
+    for iev in range(len(tau_eta)):
+        builder.begin_list()
+        good_event = False
+        tempMjj = -999
+        for i, j1_pt, j1_eta, j1_phi in zip(range(len(jet_pt[iev])), jet_pt[iev], jet_eta[iev], jet_phi[iev]):
+            for j, j2_pt, j2_eta, j2_phi in zip(range(len(jet_pt[iev])), jet_pt[iev], jet_eta[iev], jet_phi[iev]):
+                if j < i: continue
+                if (j1_pt < jet_pt_th): continue
+                if (j2_pt < jet_pt_th): continue
+                tempMjj = mjj(j1_pt, j1_eta, j1_phi, j2_pt, j2_eta, j2_phi)
+                if (tempMjj < mjj_min): continue
+                for t_eta, t_phi in zip(tau_eta[iev], tau_phi[iev]):
+                    if deltaR(t_eta, t_phi, j1_eta, j1_phi) < 0.5: continue
+                    if deltaR(t_eta, t_phi, j2_eta, j2_phi) < 0.5: continue
+                    #if (len(tau_eta[iev]) == 1): good_event = True
+                    good_event = True
+        #print("good event: ", good_event)
+        builder.append(good_event)
+        builder.end_list()
+    return builder
+
+@nb.jit(nopython=True)
+def updated_ovrm(builder, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, jet_pt_th):
+    for iev in range(len(tau_eta)):
+        builder.begin_list()
+        #print("new event")
+        good_event = False
+        for t_eta, t_phi in zip(tau_eta[iev], tau_phi[iev]):
+            #print("new tau")
+            good_jet_count = 0
+            for j_pt, j_eta, j_phi in zip(jet_pt[iev], jet_eta[iev], jet_phi[iev]):
+                if (j_pt < jet_pt_th): continue
+                dR = deltaR(t_eta, t_phi, j_eta, j_phi)
+                #print(dR)
+                if (dR > 0.5): good_jet_count += 1
+            #print(good_jet_count)
+            if (good_jet_count >= 2): good_event = True
+        #print("good event?: ",good_event)
+        builder.append(good_event)
+        builder.end_list()
+    return builder
+
+@nb.jit(nopython=True)
 def mjj(pt1: float, eta1: float, phi1: float,
         pt2: float, eta2: float, phi2: float) -> float:
     return float(math.sqrt(2*pt1*pt2*(math.cosh(eta1-eta2)-math.cos(phi1-phi2))))
@@ -118,6 +162,22 @@ def Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=False) ->
 
     return apply_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
 
+def selection_VBFSingleTau_mjj(events, VBFSingleTau_mask, usejets=False):
+    if usejets:
+        tau_pt  = ak.drop_none(ak.mask(events['Jet_pt'].compute(), VBFSingleTau_mask)) # use with new ovrm
+        tau_eta = ak.drop_none(ak.mask(events['Jet_eta'].compute(), VBFSingleTau_mask))
+        tau_phi = ak.drop_none(ak.mask(events['Jet_phi'].compute(), VBFSingleTau_mask))
+    else:
+        tau_pt  = ak.drop_none(ak.mask(events['Tau_pt'].compute(), VBFSingleTau_mask)) # use with new ovrm
+        tau_eta = ak.drop_none(ak.mask(events['Tau_eta'].compute(), VBFSingleTau_mask))
+        tau_phi = ak.drop_none(ak.mask(events['Tau_phi'].compute(), VBFSingleTau_mask))
+
+    jet_pt = events['Jet_pt'].compute()
+    jet_eta = events['Jet_eta'].compute()
+    jet_phi = events['Jet_phi'].compute()
+    return ovrm_correlation(ak.ArrayBuilder(), tau_pt, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45, 650)
+
+
 def Jet_selection_VBFSingleTau_mjj(events, Jet_selection_VBFSingleTau_Jet_mask):
     jet_pt  = ak.drop_none(ak.mask(events['Jet_pt'].compute(),  Jet_selection_VBFSingleTau_Jet_mask))
     jet_eta = ak.drop_none(ak.mask(events['Jet_eta'].compute(), Jet_selection_VBFSingleTau_Jet_mask))
@@ -132,25 +192,36 @@ def evt_sel_VBFSingleTau(events, par, n_min=1, is_gen = False):
 
     # L1
     L1Tau_IsoTau45er2p1_mask = L1Tau_IsoTau45er2p1_selection(events)
-    #L1Jet_Jet45_mask = L1Jet_Jet45_selection(events) # used for debugging only
+    L1Jet_Jet45_mask = L1Jet_Jet45_selection(events) # used for debugging only
     L1Jet_Jet45_ovrm_mask = L1Jet_Jet45_ovrm_selection(events, L1Tau_IsoTau45er2p1_mask)
-    L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+    #L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+    L1_ovrm_correlation_mjj = L1_ovrm_correlation_dijetisotau_mjj600(events, L1Tau_IsoTau45er2p1_mask)
 
     # L2 Taus
-    #L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
+    L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
     #L1Tau_IsoTau45er2p1L2NN_mask = L1Tau_IsoTau45er2p1_mask & L1Tau_L2NN_selection_VBFSingleTau(events)
 
     # "L3" objects
     VBFSingleTau_mask     = Jet_selection_VBFSingleTau(events, par, apply_PNET_WP = True)
     VBFSingleTau_Jet_mask = Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=True) # cross-cleans PNet Jets from Jets
-    VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+    #VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+    VBFSingleTau_ovrm_correlation_mjj = selection_VBFSingleTau_mjj(events, VBFSingleTau_mask, usejets=True)
+
+    #VBFSingleTau_evt_mask = (
+    #    (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
+    #    #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
+    #    (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
+    #    (VBFSingleTau_mjj_mask) & L1_DoubleJet45_Mass_Min600_mask # mjj requirement
+    #)
 
     VBFSingleTau_evt_mask = (
-        (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
-        #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
-        (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
-        (VBFSingleTau_mjj_mask) & L1_DoubleJet45_Mass_Min600_mask # mjj requirement
+        (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & (ak.sum(L2NN_mask, axis=-1) >= n_min) & 
+        (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & # taus
+        #(ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & # jets
+        # mjj and overlap removal correlation condition
+        (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 )
     )
+
 
     if is_gen:
         # if MC data, at least n_min GenTau should also pass
@@ -165,7 +236,8 @@ def evt_sel_VBFSingleTau(events, par, n_min=1, is_gen = False):
     Jets = get_Jets(events)
 
     L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L1Tau_IsoTau45er2p1_mask, n_min_taus = n_min)
-    L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_ovrm_mask, n_min_jets = 2)
+    #L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_ovrm_mask, n_min_jets = 2)
+    L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_mask, n_min_jets = 2)
     Jets_VBFSingleTau = Jets[VBFSingleTau_mask]
     Jets_VBFSingleTau_Jet = Jets[VBFSingleTau_Jet_mask]
 
@@ -238,23 +310,56 @@ def evt_sel_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1(events, n_m
 
     # L1
     L1Tau_IsoTau45er2p1_mask = L1Tau_IsoTau45er2p1_selection(events)
-    #L1Jet_Jet45_mask = L1Jet_Jet45_selection(events) # used for debugging only
+    L1Jet_Jet45_mask = L1Jet_Jet45_selection(events) # used for debugging only
     L1Jet_Jet45_ovrm_mask = L1Jet_Jet45_ovrm_selection(events, L1Tau_IsoTau45er2p1_mask)
-    L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+    #L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+
+    L1_ovrm_correlation_mjj = L1_ovrm_correlation_dijetisotau_mjj600(events, L1Tau_IsoTau45er2p1_mask)
+
+    print("L1")
+    L1_only = (
+              (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & 
+              (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) &
+              (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1)
+              )
+    print(ak.sum(L1_only))
 
     # L2 Taus
-    #L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
+    L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
 
     # "L3" objects
     VBFSingleTau_mask     = Tau_selection_VBFSingleTau(events)
     VBFSingleTau_Jet_mask = Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=False)
-    VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+    #VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+    VBFSingleTau_ovrm_correlation_mjj = selection_VBFSingleTau_mjj(events, VBFSingleTau_mask, usejets=False)
+
+    #print("HLT")
+    #HLT_no_L1 = (
+    #            (ak.sum(L2NN_mask, axis=-1) >= n_min) &
+    #            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) &
+    #            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) &
+    #            (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1)
+    #            )
+    #print(ak.sum(HLT_no_L1))
+
    
+    # removed L1 requirements, not confident that the overlap removal performed for L1Jets (without mjj)
+    # is consistent with what L1 actually does
+    #VBFSingleTau_evt_mask = (
+    #    (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & 
+    #    (ak.sum(L2NN_mask, axis=-1) >= n_min) & # taus
+    #    #(ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_mask, axis=-1) >= 2) & # jets
+    #    (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
+    #    (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 ) # dijet + tau mjj correlation requirement
+    #    #(VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+    #)
+
     VBFSingleTau_evt_mask = (
-        (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & 
-        #(ak.sum(L2NN_mask, axis=-1) >= n_min) & # taus
-        (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
-        (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+        (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & (ak.sum(L2NN_mask, axis=-1) >= n_min) & 
+        (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & # taus
+        (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & # jets
+        # mjj and overlap removal correlation condition
+        (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 )
     )
 
     if is_gen:
@@ -272,7 +377,7 @@ def evt_sel_VBF_DiPFJet45_Mjj650_MediumDeepTauPFTauHPS45_L2NN_eta2p1(events, n_m
 
     L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L1Tau_IsoTau45er2p1_mask, n_min_taus = n_min)
     #L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L2NN_mask, n_min_taus = n_min)
-    L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_ovrm_mask, n_min_jets = 2)
+    L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_mask, n_min_jets = 2)
     Taus_VBFSingleTau = Taus[VBFSingleTau_mask]
     Jets_VBFSingleTau_Jet = Jets[VBFSingleTau_Jet_mask]
 
@@ -314,6 +419,7 @@ def L1Tau_IsoTau45er2p1_selection(events):
     return L1_IsoTau45er2p1_mask
 
 def L1Jet_Jet45_ovrm_selection(events, VBFSingleTau_mask) -> ak.Array:
+
     tau_pt  = ak.drop_none(ak.mask(events['L1Tau_pt'].compute(), VBFSingleTau_mask))
     tau_eta = ak.drop_none(ak.mask(events['L1Tau_eta'].compute(), VBFSingleTau_mask))
     tau_phi = ak.drop_none(ak.mask(events['L1Tau_phi'].compute(), VBFSingleTau_mask))
@@ -322,7 +428,19 @@ def L1Jet_Jet45_ovrm_selection(events, VBFSingleTau_mask) -> ak.Array:
     jet_eta = events['L1Jet_eta'].compute()
     jet_phi = events['L1Jet_phi'].compute()
 
+    #return updated_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
     return apply_ovrm(ak.ArrayBuilder(), tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45.).snapshot()
+
+def L1_ovrm_correlation_dijetisotau_mjj600(events, VBFSingleTau_mask):
+    tau_pt  = ak.drop_none(ak.mask(events['L1Tau_pt'].compute(), VBFSingleTau_mask))
+    tau_eta = ak.drop_none(ak.mask(events['L1Tau_eta'].compute(), VBFSingleTau_mask))
+    tau_phi = ak.drop_none(ak.mask(events['L1Tau_phi'].compute(), VBFSingleTau_mask))
+
+    jet_pt  = events['L1Jet_pt'].compute()
+    jet_eta = events['L1Jet_eta'].compute()
+    jet_phi = events['L1Jet_phi'].compute()
+
+    return ovrm_correlation(ak.ArrayBuilder(), tau_pt, tau_eta, tau_phi, jet_pt, jet_eta, jet_phi, 45, 600)
 
 def L1Jet_Jet45_selection(events):
     L1_Jet45_mask = (events["L1Jet_pt"].compute() >= 45) & (events['L1Jet_eta'].compute() < 4.7) & (events['L1Jet_eta'].compute() > -4.7)
@@ -373,7 +491,6 @@ def get_selL1Jets(L1Jets, L1Jet_Jet45_mask, n_min_jets = 2):
     return L1Jets_Sel
 
 
-
 class VBFSingleTauDataset(Dataset):
     def __init__(self, fileName):
         Dataset.__init__(self, fileName)
@@ -402,7 +519,6 @@ class VBFSingleTauDataset(Dataset):
         print(f"Number of events in denominator: {len(events)}")
 
         VBFSingleTau_evt_mask, _, _ = evt_sel_VBFSingleTau(events, par, n_min=1, is_gen = False)
-        print(VBFSingleTau_evt_mask)
         N_num = len(events[VBFSingleTau_evt_mask])
         print(f"Number of events in numerator: {N_num}")
         print('')
@@ -554,29 +670,41 @@ class VBFSingleTauDataset(Dataset):
         # Selection of L1/Gen and Jets objects without PNET WP
         # L1
         L1Tau_IsoTau45er2p1_mask = L1Tau_IsoTau45er2p1_selection(events)
+        L1Jet_Jet45_mask = L1Jet_Jet45_selection(events)
         L1Jet_Jet45_ovrm_mask = L1Jet_Jet45_ovrm_selection(events, L1Tau_IsoTau45er2p1_mask)
-        L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+        #L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+        L1_ovrm_correlation_mjj = L1_ovrm_correlation_dijetisotau_mjj600(events, L1Tau_IsoTau45er2p1_mask)
     
         # L2 Taus
-        #L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
+        L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
         #L1Tau_IsoTau45er2p1L2NN_mask = L1Tau_IsoTau45er2p1_mask & L1Tau_L2NN_selection_VBFSingleTau(events)
     
         # "L3" objects
         VBFSingleTau_mask     = Jet_selection_VBFSingleTau(events, par, apply_PNET_WP = False) # used for denom
+        # TODO : look into removing this, it has improper overlap removal also...
         VBFSingleTau_Jet_mask = Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=True) # cross-cleans PNet jets from jets
-        VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+        #VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+        VBFSingleTau_ovrm_correlation_mjj = selection_VBFSingleTau_mjj(events, VBFSingleTau_mask, usejets=True)
  
         # at least n_min L1tau/ recoJet and 2 L1jet / recoJet should pass
+        #VBFSingleTau_evt_mask = (
+        #    (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
+        #    #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
+        #    (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
+        #    (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+        #)
+
         VBFSingleTau_evt_mask = (
-            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
-            #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
-            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
-            (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+            (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & (ak.sum(L2NN_mask, axis=-1) >= n_min) & 
+            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & # taus
+            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & # jets
+            # mjj and overlap removal correlation condition
+            (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 )
         )
 
         # matching
         L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L1Tau_IsoTau45er2p1_mask, n_min_taus = n_min)
-        L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_ovrm_mask, n_min_jets = 2)
+        L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_mask, n_min_jets = 2)
         Jets_VBFSingleTau = Jets[VBFSingleTau_mask]
         Jets_VBFSingleTau_Jet = Jets[VBFSingleTau_Jet_mask]
         GenTaus_VBFSingleTau = GenTaus[GenTau_mask]
@@ -598,11 +726,19 @@ class VBFSingleTauDataset(Dataset):
         # Selection of L1/Gen and Jets objects with PNET WP
         VBFSingleTau_mask = Jet_selection_VBFSingleTau(events, par, apply_PNET_WP = True)
         # at least 1 L1tau/ Jet/ GenTau should pass
+        #VBFSingleTau_evt_mask = (
+        #    (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
+        #    #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
+        #    (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
+        #    (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+        #)
+
         VBFSingleTau_evt_mask = (
-            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
-            #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
-            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
-            (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+            (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & (ak.sum(L2NN_mask, axis=-1) >= n_min) & 
+            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & # taus
+            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & # jets
+            # mjj and overlap removal correlation condition
+            (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 )
         )
 
         # matching
@@ -635,30 +771,40 @@ class VBFSingleTauDataset(Dataset):
         # Selection of L1/Gen and Jets objects without PNET WP
         # L1
         L1Tau_IsoTau45er2p1_mask = L1Tau_IsoTau45er2p1_selection(events)
-        L1Jet_Jet45_ovrm_mask = L1Jet_Jet45_ovrm_selection(events, L1Tau_IsoTau45er2p1_mask)
-        L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+        L1Jet_Jet45_mask = L1Jet_Jet45_selection(events)
+        #L1Jet_Jet45_ovrm_mask = L1Jet_Jet45_ovrm_selection(events, L1Tau_IsoTau45er2p1_mask)
+        #L1_DoubleJet45_Mass_Min600_mask = L1Jet_DoubleJet45_Mass_Min600_selection(events, L1Jet_Jet45_ovrm_mask) # mask is per event
+        L1_ovrm_correlation_mjj = L1_ovrm_correlation_dijetisotau_mjj600(events, L1Tau_IsoTau45er2p1_mask)
     
         # L2 Taus
-        #L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
+        L2NN_mask = L1Tau_L2NN_selection_VBFSingleTau(events)
         #L1Tau_IsoTau45er2p1L2NN_mask = L1Tau_IsoTau45er2p1_mask & L1Tau_L2NN_selection_VBFSingleTau(events)
     
         # "L3" objects
         VBFSingleTau_mask     = Tau_selection_VBFSingleTau(events, apply_DeepTau_WP = False)
         VBFSingleTau_Jet_mask = Jet_selection_VBFSingleTau_Jets(events, VBFSingleTau_mask, usejets=False)
-        VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+        #VBFSingleTau_mjj_mask = Jet_selection_VBFSingleTau_mjj(events, VBFSingleTau_Jet_mask)
+        VBFSingleTau_ovrm_correlation_mjj = selection_VBFSingleTau_mjj(events, VBFSingleTau_mask, usejets=False)
  
         # at least n_min L1tau/ recoJet and 2 L1jet/jet should pass + L1 trigger
-        VBFSingleTau_evt_mask = (
-            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
-            #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
-            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
-            (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
-        )
+        #VBFSingleTau_evt_mask = (
+        #    (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
+        #    #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
+        #    (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
+        #    (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+        #)
 
+        VBFSingleTau_evt_mask = (
+            (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & (ak.sum(L2NN_mask, axis=-1) >= n_min) & 
+            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & # taus
+            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & # jets
+            # mjj and overlap removal correlation condition
+            (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 )
+        )
 
         # matching
         L1Taus_VBFSingleTau = get_selL1Taus(L1Taus, L1Tau_IsoTau45er2p1_mask, n_min_taus = n_min)
-        L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_ovrm_mask, n_min_jets = 2)
+        L1Jets_VBFSingleTau = get_selL1Jets(L1Jets, L1Jet_Jet45_mask, n_min_jets = 2)
         #Jets_VBFSingleTau = Jets[VBFSingleTau_mask]
         Taus_VBFSingleTau = Taus[VBFSingleTau_mask]
         Jets_VBFSingleTau_Jet = Jets[VBFSingleTau_Jet_mask]
@@ -681,11 +827,19 @@ class VBFSingleTauDataset(Dataset):
         # Selection of L1/Gen and Jets objects with Deeptau WP
         VBFSingleTau_mask = Tau_selection_VBFSingleTau(events, apply_DeepTau_WP = True)
         # at least 1 L1tau/ Jet/ GenTau and 2 L1jet / Jet / GenJet should pass
+        #VBFSingleTau_evt_mask = (
+        #    (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
+        #    #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
+        #    (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
+        #    (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+        #)
+
         VBFSingleTau_evt_mask = (
-            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & # taus
-            #(ak.sum(L2NN_mask, axis=-1) >= n_min) &
-            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & (ak.sum(L1Jet_Jet45_ovrm_mask, axis=-1) >= 2) & # jets
-            (VBFSingleTau_mjj_mask) & (L1_DoubleJet45_Mass_Min600_mask) # mjj requirement
+            (ak.sum(L1Tau_IsoTau45er2p1_mask, axis=-1) >= n_min) & (ak.sum(L2NN_mask, axis=-1) >= n_min) & 
+            (ak.sum(VBFSingleTau_mask, axis=-1) >= n_min) & # taus
+            (ak.sum(VBFSingleTau_Jet_mask, axis=-1) >= 2) & # jets
+            # mjj and overlap removal correlation condition
+            (ak.sum(VBFSingleTau_ovrm_correlation_mjj, axis=-1) >= 1) & (ak.sum(L1_ovrm_correlation_mjj, axis=-1) >= 1 )
         )
 
         # matching

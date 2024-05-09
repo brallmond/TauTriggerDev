@@ -182,6 +182,7 @@ class SaveOptimisationResultsVBFSingleTau(Task, HTCondorWorkflow, law.LocalWorkf
         ]
         FileNameList_rate = files_from_path(Rate_path)
         FileNameList_rate = FileNameList_rate[0]
+        print(FileNameList_rate)
         # only works with one file, not a bug in events
         dataset_eff = VBFSingleTauDataset(FileNameList_eff)
         dataset_rate = VBFSingleTauDataset(FileNameList_rate)
